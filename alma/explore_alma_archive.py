@@ -1,7 +1,11 @@
 """
 
+
+
+astroquery did not work
 http://astroquery.readthedocs.io/en/latest/
 
+so used alma_aq_data.csv via wget
 
 """
 from __future__ import (absolute_import, division, print_function,
@@ -56,8 +60,174 @@ def rd_config(config_file=None):
 
     return config
 
+
+def Integration(data, debug=False):
+    """
+
+
+    """
+
+    xdata = data
+
+    ndata = len(xdata)
+
+    print('ndata:', ndata)
+
+    data_min = min(xdata)
+    data_max = max(xdata)
+
+    print('min:', data_min)
+    argsort_data = np.argsort(xdata)
+    print(' 0.1%:', xdata[argsort_data[int(ndata*0.001)]])
+    print(' 0.5%:', xdata[argsort_data[int(ndata*0.005)]])
+    print(' 1.0%:', xdata[argsort_data[int(ndata*0.01)]])
+    print(' 5.0%:', xdata[argsort_data[int(ndata*0.05)]])
+    print('50.0%:', xdata[argsort_data[int(ndata*0.50)]])
+    print('95.0%:', xdata[argsort_data[int(ndata*0.95)]])
+    print('99.0%:', xdata[argsort_data[int(ndata*0.99)]])
+    print('99.5%:', xdata[argsort_data[int(ndata*0.995)]])
+    print('99.9%:', xdata[argsort_data[int(ndata*0.999)]])
+    print('max:', data_max)
+
+    label = str(ndata)
+    # + '\n' + str(data_min) + '\n' + str(data_max)
+    plt.hist(xdata, bins=100, label=label)
+    plt.grid()
+    plt.legend()
+    plt.xlabel('Integration')
+    plt.ylabel('Frequency per bin')
+
+    plotfile = infile + '_Integration_fig1.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    plt.clf()
+
+
+    itest = xdata < 3600
+    xdata = xdata[itest]
+
+    ndata = len(xdata)
+    label = str(ndata)
+    # + '\n' + str(data_min) + '\n' + str(data_max)
+    plt.hist(xdata, bins=100, label=label)
+    plt.grid()
+    plt.legend()
+    plt.xlabel('Integration')
+    plt.ylabel('Frequency per bin')
+
+    plotfile = infile + '_Integration_fig2.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    plt.clf()
+
+    return
+
+
+def Largest_angular_scale(data):
+
+
+
+    return
+
+
+def Frequency_support(data, debug=False):
+    """
+
+    decode the frequency metadata
+
+    The frequency info is stored in a string with a arbitrary number of
+    segments of the form:
+         [330.55..330.60GHz,0.06kHz,null]
+
+    """
+    # help(data)
+
+
+    print('__file__:', __file__)
+    print('__name__: ', __name__)
+
+    print('data.shape:', data.shape)
+    print('data.dtype:', data.dtype)
+
+    print('Some info for first and last data record')
+    print(data[0])
+    print(data[0].shape)
+    print(data[0].dtype)
+    print(len(data[0]))
+    print()
+
+    print(data[-1])
+    print(data[-1].shape)
+    print(data[-1].dtype)
+    print(len(data[-1]))
+    print()
+
+    irec = -1
+    nvalue_max = -1
+    nvalues = []
+    freq_observed = []
+    for record in data:
+        irec = irec + 1
+        if debug:
+            print(irec, record)
+
+        values = record.split('[')
+        if debug:
+            print(irec, record.dtype, record.shape,
+                  len(record), len(values),
+                  len(values[0]), len(values[-1]))
+
+        nvalue = len(values)
+        nvalues.append(nvalue)
+        nvalue_max = max(nvalue_max, nvalue)
+
+        # parse value[1:] since value[0] is the data before first '['
+        for cell in values[1:]:
+            if debug:
+                print('cell:', cell)
+            freq_cells = cell.split(',')
+            if debug:
+                print(len(freq_cells))
+                print('freq_cells[0]:', freq_cells[0])
+            freq = freq_cells[0].split('..')
+            itest = freq[1].find('Hz')
+            if debug:
+                print('Units:', freq[1][itest-1:])
+            if freq[1][itest-1:itest] != 'G':
+                sys.exit()
+            if debug:
+                print(len(freq))
+                print(freq[0], freq[1])
+            # assume always GHz for now
+            freq_observed.append(float(freq[0]))
+
+        values = record.split(']')
+        if debug:
+            print('Number of values:', len(values),
+                  len(values[0]), len(values[-1]))
+
+    print('Maximum Frequency range:', nvalue_max)
+
+    ndata = len(freq_observed)
+    label = str(ndata)
+    xdata = freq_observed
+    plt.hist(xdata, bins=100, label=label)
+    plt.grid()
+    plt.legend()
+    plt.xlabel('Observed Frequency (Ghz)')
+    plt.ylabel('Frequency per bin')
+
+    plotfile = infile + '_Frequency_support_fig2.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    plt.clf()
+
+    return
+
 def query_archive(wget=False, test=False):
     """
+
+
 
     """
 
@@ -167,6 +337,30 @@ def parse_args(version=None):
 
     return args
 
+def plot_radec(ra, dec, suffix=None):
+    """
+
+    """
+
+    xdata = ra
+    ydata = dec
+
+    print(np.min(xdata), np.max(xdata), len(xdata))
+    print(np.min(ydata), np.max(ydata), len(ydata))
+    ndata = len(xdata)
+    plt.title(infile)
+    plt.scatter(xdata, ydata, s=2, edgecolor='none', label=str(ndata))
+
+    plt.xlim(0.0, 360.0)
+    plt.ylim(-90.0, 60.0)
+    plt.legend()
+
+    plotfile = './plots/infile' + '_radec.png'
+    plt.savefig(plotfile)
+    plt.clf()
+
+    return
+
 
 if __name__ == '__main__':
     """
@@ -232,21 +426,16 @@ if __name__ == '__main__':
         if debug:
             key=raw_input("Enter any key to continue: ")
 
-    xdata = table['RA']
-    ydata = table['Dec']
+    plot_radec(table['RA'], table['Dec'])
 
-    print(np.min(xdata), np.max(xdata), len(xdata))
-    print(np.min(ydata), np.max(ydata), len(ydata))
-    ndata = len(xdata)
-    plt.title(infile)
-    plt.scatter(xdata, ydata, s=2, edgecolor='none', label=str(ndata))
+    Largest_angular_scale(data=table['Largest angular scale'])
 
-    plt.xlim(0.0, 360.0)
-    plt.ylim(-90.0, 60.0)
-    plt.legend()
+    if debug:
+        key=raw_input("Enter any key to continue: ")
 
-    plt.savefig(infile + '_fig1.png')
-    plt.clf()
+    Frequency_support(data=table['Frequency support'], debug=debug)
+
+    Integration(data=table['Integration'])
 
     # plt.show()
 
@@ -295,6 +484,7 @@ if __name__ == '__main__':
 
     print(len(d2d), len(idx_unique), len(idx_unique_indices))
 
+    # create table of Veron quasars that have ALMA observations
     veron_alma = Veron2010[idx_unique_indices]
     xdata = d2d[idx_unique_indices].arcsec
     itest = xdata  < 30.0
@@ -379,6 +569,17 @@ if __name__ == '__main__':
     ndata = len(veron_alma)
     veron_alma.info('stats')
 
+    # limit to redshift > 0.3 and 20cm/6cm flux less that 10mJy or NAN
+    itest = (veron_alma['z'] >= 0.3) & (np.isnan(veron_alma['F6cm']))
+    itest = (veron_alma['F6cm'] <= 0.01)
+    itest = (np.isnan(veron_alma['F6cm'])) | (veron_alma['F6cm'] <= 0.01)
+
+
+    itest_rqq = (
+        (veron_alma['z'] >= 0.3) &
+        (np.isnan(veron_alma['F6cm']) | veron_alma['F6cm'] <= 0.01) &
+        (np.isnan(veron_alma['F20cm']) | veron_alma['F20cm'] <= 0.01))
+
     igood = 0
     for i in range(0, ndata):
         if (veron_alma[i]['z'] >= 0.3 and
@@ -390,5 +591,8 @@ if __name__ == '__main__':
                   veron_alma[i]['z'], veron_alma[i]['Vmag'],
                   veron_alma[i]['F6cm'], veron_alma[i]['F20cm'])
 
+    #
+    veron_alma[itest_rqq].info('stats')
+    xdata = veron_alma[itest_rqq]['RA']
 
     # read and match to SDSS DR7QSO
