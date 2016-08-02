@@ -21,6 +21,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 print('maplotlib.__version__:', mpl.__version__)
 
+#from astropy import __version__
 import astropy
 print('astropy.__version__:', astropy.__version__)
 
@@ -60,6 +61,10 @@ def rd_config(config_file=None):
 
     return config
 
+
+def ScanIntent(data, debug=False):
+
+    return
 
 def Integration(data, debug=False):
     """
@@ -546,7 +551,6 @@ if __name__ == '__main__':
     plt.savefig(plotfile)
     plt.clf()
 
-
     xdata = veron_alma['F20cm']
     ndata = len(xdata)
     print(min(xdata), max(ydata))
@@ -570,15 +574,38 @@ if __name__ == '__main__':
     veron_alma.info('stats')
 
     # limit to redshift > 0.3 and 20cm/6cm flux less that 10mJy or NAN
+    print(len(veron_alma['z']))
+    isnotnan = ~np.isnan(veron_alma['z'])
+    print(len(isnotnan))
+    itest = veron_alma['z'] >= 0.3
+    print(len(itest))
+    print(np.min(veron_alma['z']), np.max(veron_alma['z']))
+    print(np.nanmin(veron_alma['z']), np.nanmax(veron_alma['z']))
+    print(len(~np.isnan(veron_alma['F6cm'])))
+    itest = (~np.isnan(veron_alma['F6cm']))
+    print(len(itest))
     itest = (veron_alma['z'] >= 0.3) & (np.isnan(veron_alma['F6cm']))
+    print(len(itest))
+
     itest = (veron_alma['F6cm'] <= 0.01)
+    print(len(itest))
+
+    itest = (~np.isnan(veron_alma['z'])) & (veron_alma['z'] >= 0.3)
+    print(len(itest))
+
     itest = (np.isnan(veron_alma['F6cm'])) | (veron_alma['F6cm'] <= 0.01)
+    print(len(itest))
+
+    itest = (np.isnan(veron_alma['F20cm'])) | (veron_alma['F20cm'] <= 0.01)
+    print(len(itest))
 
 
     itest_rqq = (
-        (veron_alma['z'] >= 0.3) &
-        (np.isnan(veron_alma['F6cm']) | veron_alma['F6cm'] <= 0.01) &
-        (np.isnan(veron_alma['F20cm']) | veron_alma['F20cm'] <= 0.01))
+        ((~np.isnan(veron_alma['z'])) & (veron_alma['z'] >= 0.3)) &
+        ((np.isnan(veron_alma['F6cm'])) | (veron_alma['F6cm'] <= 0.01)) &
+        ((np.isnan(veron_alma['F20cm'])) | (veron_alma['F20cm'] <= 0.01)))
+    print(len(itest_rqq))
+    print(len(veron_alma[itest_rqq]))
 
     igood = 0
     for i in range(0, ndata):
