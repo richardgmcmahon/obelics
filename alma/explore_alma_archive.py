@@ -35,8 +35,7 @@ from astropy import units as u
 from astropy.table import Table
 from astropy.table import vstack
 
-from astroquery.alma import Alma
-
+# from astroquery.alma import Alma
 
 def wget_archivelog():
     """
@@ -96,6 +95,7 @@ def rd_config(config_file=None):
 def ScanIntent(data, debug=False):
 
     return
+
 
 def Integration(data, debug=False):
     """
@@ -406,7 +406,8 @@ def parse_args(version=None):
     return args
 
 
-def plot_radec(ra, dec, title=None, suffix=None, infile=None):
+def plot_radec(ra, dec, title=None, suffix=None, infile=None,
+               filelabel=None):
     """
 
     """
@@ -426,106 +427,96 @@ def plot_radec(ra, dec, title=None, suffix=None, infile=None):
 
     if title is not None: plt.title(title)
     plotfile = 'radec.png'
-    if infile is not None: plotfile = infile + '_radec.png'
+    if filelabel is None:
+        filelabel = ''
+    if filelabel is not None:
+        filelabel = '_' + filelabel
+    if infile is not None: plotfile = infile + '_radec' + filelabel + '.png'
     plt.savefig(plotfile)
     plt.clf()
 
     return
 
 
-if __name__ == '__main__':
+def drqso_analysis(radec_alma=None, dr='dr7'):
     """
 
-    default activity could be to look for fits archive file and
-    then csv file in that order and print out the help info
 
     """
+    if dr == 'dr12':
+        infile = config.get("defaults", "infile_dr12qso")
+    if dr == 'dr7':
+        infile = config.get("defaults", "infile_dr7qso")
 
-    # could part of debug option
-    print('numpy.__version__:', np.__version__)
-    print('maplotlib.__version__:', mpl.__version__)
-    print('astropy.__version__:', astropy.__version__)
-
-    pid = os.getpid()
-    print('Current working directory: %s' % (os.getcwd()))
-    print('User: ', os.getenv('USER'))
-    print('Hostname: ', os.getenv('HOSTNAME'))
-    print('Host:     ', os.getenv('HOST'))
-    print('Hostname: ', socket.gethostname())
-    print()
-    print('__file__: ', __file__)
-    print('__name__: ', __name__)
-
-    t0 = time.time()
-
-    args = parse_args(version=None)
-
-    read_csv = args.read_csv
-    read_fits = args.read_fits
-
-    write_fits = args.write_fits
-    convert_csv = args.convert_csv
-    wget_csvfile = args.wget_csvfile
-
-    debug = args.debug
-
-    config = rd_config(config_file=None)
-    config = rd_config()
-
-    infile_prefix_aa = config.get("defaults", "infile_prefix_aa")
-    print('infile_prefix_aa:', infile_prefix_aa)
-
-    if wget_csvfile:
-        wget_archivelog()
-        sys.exit()
-
-    if read_csv or convert_csv:
-        infile = infile_prefix_aa + '.csv'
-        print('Read:', infile)
-
-        table = Table.read(infile, format='ascii')
-        table.meta['file'] = infile
-        table.info('stats')
-
-    if write_fits or convert_csv:
-        outfile = infile_prefix_aa + '.fits'
-        table.write(outfile, overwrite=True)
-
-    if read_fits:
-        infile = infile_prefix_aa + '.fits'
-        print('Reading:', infile)
-        table = Table.read(infile)
-        table.meta['file'] = infile
-        print('Elapsed time(secs):', time.time() - t0)
-        table.info('stats')
-        colnames = table.colnames
-        ncolumns = len(table.colnames)
-        print('Number of columns:', ncolumns)
-        for i in range(0, ncolumns):
-            data_min = np.min(np.array(table.field(i), dtype=object))
-            data_max = np.max(np.array(table.field(i), dtype=object))
-            # data_median = np.median(np.array(table.field(i), dtype=object))
-            print(i+1, colnames[i], data_min, data_max)
-
-        if debug:
-            key=raw_input("Enter any key to continue: ")
-
-    plot_radec(table['RA'], table['Dec'],
-               title=table.meta['file'], infile=infile)
-
-    Largest_angular_scale(data=table['Largest angular scale'])
-
+    print('Reading:', infile)
+    drqso = Table.read(infile)
+    debug = True
     if debug:
-        key=raw_input("Enter any key to continue: ")
+        drqso.info('stats')
 
-    Frequency_support(data=table['Frequency support'], infile=infile,
-                      debug=debug)
+    ra = drqso['RA']
+    dec = drqso['DEC']
+    radec_drqso = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
-    Integration(data=table['Integration'])
 
-    # plt.show()
+    print('Using: match_coordinates_sky')
+    idx, d2d, d3d = match_coordinates_sky(radec_alma, radec_drqso)
 
-    # read and match to Veron+2010 quasar catalogue
+    print('len(idx):', len(idx))
+    print('idxmatch range:', np.min(idx), np.max(idx))
+    idx_unique, idx_unique_indices = np.unique(idx, return_index=True)
+    print('Number of unique sources:', len(idx_unique), len(idx))
+    print('idxmatch range:', np.min(idx_unique_indices),
+          np.max(idx_unique_indices))
+    print()
+
+    # match_to_catalog_sky(catalogcoord[, nthneighbor])
+    # Finds the nearest on-sky matches of this coordinate in a set
+    # of catalog coordinates.
+    print('Using: match_to_catalog_sky')
+    idx, d2d, d3d = radec_drqso.match_to_catalog_sky(radec_alma)
+
+    print('len(idx):', len(idx))
+    print('idxmatch range:', np.min(idx), np.max(idx))
+    idx_unique, idx_unique_indices = np.unique(idx, return_index=True)
+    print('Number of unique sources:', len(idx_unique), len(idx))
+    print('idxmatch range:', np.min(idx_unique_indices),
+          np.max(idx_unique_indices))
+    print()
+
+    print(len(d2d), len(idx_unique), len(idx_unique_indices))
+
+    # create table of Veron quasars that have ALMA observations
+    drqso_alma = drqso[idx_unique_indices]
+    xdata = d2d[idx_unique_indices].arcsec
+    itest = xdata  < 15.0
+
+    drqso_alma = drqso_alma[itest]
+    ndata = len(drqso_alma)
+    print('Number of Quasars within 15" match radius:', ndata)
+    print()
+
+    if dr == 'dr7':
+        for isource, source in enumerate(drqso_alma):
+            print(isource + 1, source['SDSSJ'],
+                  source['z'], source['RMAG'],
+                  source['FIRSTMAG'], source['ONAME'])
+
+
+    if dr == 'dr12':
+        for isource, source in enumerate(drqso_alma):
+            print(isource + 1, source['SDSS_NAME'],
+                  source['Z_VI'], source['PSFMAG'][2],
+                  source['FIRST_FLUX'])
+
+
+    return drqso_alma
+
+
+def veron2010_analysis(radec_alma=None):
+    """
+    read and match to Veron+2010 quasar catalogue
+    """
     infile_Veron2010 = config.get("defaults", "infile_Veron2010")
     print('Reading:', infile_Veron2010)
     Veron2010 = Table.read(infile_Veron2010)
@@ -536,9 +527,6 @@ if __name__ == '__main__':
     dec = Veron2010['DEJ2000']
     radec_veron = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
-    ra= table['RA']
-    dec = table['Dec']
-    radec_alma = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
     # See http://docs.astropy.org/en/stable/coordinates/matchsep.html
 
@@ -709,7 +697,122 @@ if __name__ == '__main__':
                   veron_alma[i]['F6cm'], veron_alma[i]['F20cm'])
 
     #
+    veron_alma[itest_rqq].info('stats')
+    xdata = veron_alma[itest_rqq]['RAJ2000']
+    ydata = veron_alma[itest_rqq]['DEJ2000']
 
-    xdata = veron_alma[itest_rqq]['RA']
+    plt.close()
+    plot_radec(xdata, ydata,
+               title=alma.meta['file'], infile=infile,
+               filelabel='rqq')
 
-    # read and match to SDSS DR7QSO
+    return veron_alma
+
+
+if __name__ == '__main__':
+    """
+
+    default activity could be to look for fits archive file and
+    then csv file in that order and print out the help info
+
+    """
+
+    # could part of debug option
+    print('numpy.__version__:', np.__version__)
+    print('maplotlib.__version__:', mpl.__version__)
+    print('astropy.__version__:', astropy.__version__)
+
+    pid = os.getpid()
+    print('Current working directory: %s' % (os.getcwd()))
+    print('User: ', os.getenv('USER'))
+    print('Hostname: ', os.getenv('HOSTNAME'))
+    print('Host:     ', os.getenv('HOST'))
+    print('Hostname: ', socket.gethostname())
+    print()
+    print('__file__: ', __file__)
+    print('__name__: ', __name__)
+
+    t0 = time.time()
+
+    args = parse_args(version=None)
+
+    read_csv = args.read_csv
+    read_fits = args.read_fits
+
+    write_fits = args.write_fits
+    convert_csv = args.convert_csv
+    wget_csvfile = args.wget_csvfile
+
+    debug = args.debug
+
+    config = rd_config(config_file=None)
+    config = rd_config()
+
+    infile_prefix_aa = config.get("defaults", "infile_prefix_aa")
+    print('infile_prefix_aa:', infile_prefix_aa)
+
+    if wget_csvfile:
+        wget_archivelog()
+        sys.exit()
+
+    if read_csv or convert_csv:
+        infile = infile_prefix_aa + '.csv'
+        print('Read:', infile)
+
+        alma = Table.read(infile, format='ascii')
+        alma.meta['file'] = infile
+        alma.info('stats')
+
+    if write_fits or convert_csv:
+        outfile = infile_prefix_aa + '.fits'
+        alma.write(outfile, overwrite=True)
+
+    if read_fits:
+        infile = infile_prefix_aa + '.fits'
+        print('Reading:', infile)
+        alma = Table.read(infile)
+        alma.meta['file'] = infile
+        print('Elapsed time(secs):', time.time() - t0)
+        alma.info('stats')
+        colnames = alma.colnames
+        ncolumns = len(alma.colnames)
+        print('Number of columns:', ncolumns)
+        for i in range(0, ncolumns):
+            data_min = np.min(np.array(alma.field(i), dtype=object))
+            data_max = np.max(np.array(alma.field(i), dtype=object))
+            # data_median = np.median(np.array(table.field(i), dtype=object))
+            print(i+1, colnames[i], data_min, data_max)
+
+        if debug:
+            key=raw_input("Enter any key to continue: ")
+
+    ra = alma['RA']
+    dec = alma['Dec']
+    plot_radec(ra, dec,
+               title = alma.meta['file'], infile=infile)
+
+    Largest_angular_scale(data=alma['Largest angular scale'])
+
+    if debug:
+        key=raw_input("Enter any key to continue: ")
+
+    Frequency_support(data=alma['Frequency support'], infile=infile,
+                      debug=debug)
+
+    Integration(data=alma['Integration'])
+
+    # plt.show()
+    # create astropy RA, Dec 'object' thing
+    radec_alma = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
+
+    # read and match to Veron+2010 quasars
+    veron2010_alma = veron2010_analysis(radec_alma=radec_alma)
+
+    # read and match to SDSS DR7QSO quasars
+    dr7qso_alma = drqso_analysis(radec_alma=radec_alma)
+
+    dr12qso_alma = drqso_analysis(radec_alma=radec_alma, dr='dr12')
+
+    # make a html table with NED and SDSS DR7 and DR12 links
+
+    # match back to alma observataions
