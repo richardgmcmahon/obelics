@@ -18,12 +18,425 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from astropy.table import Table
-from table_stats import *
+from astropy.table import Table, Column
 
 
 # local functions
 import explore_alma_archive as eaa
+from plotid import *
+from table_stats import *
+from write_ds9_regionfile import *
+
+def make_ds9regionfile(data):
+    """
+
+    """
+
+    unique_files, index, counts = np.unique(
+        data['FILE'], return_index=True, return_counts=True)
+    print('Number of unique source files:', len(unique_files))
+
+    nchars_max = 0
+    for ifile, file, in enumerate(unique_files):
+        print(ifile+1, ifile, counts[ifile], file)
+        # parse the project info from file name
+        file_parsed = file.split("/")
+        project = file_parsed[1]
+        nchars = len(project)
+        nchars_max = max(nchars_max, nchars)
+        print('Project:', project, len(project))
+        print('Image filename:', file_parsed[-1])
+
+    print('Maximum string length:', nchars_max)
+    nrows = len(data)
+    print('Number of rows:', nrows)
+
+    # create empty PROJECT column
+    dtype = 'S' + str(nchars_max)
+    print('dtype:', dtype)
+    project = Column(length=nrows, name='PROJECT', dtype=dtype)
+    data.add_column(project, index=1)
+
+    for ifile, file, in enumerate(data['FILE']):
+        # parse the project info from file name
+        file_parsed = file.split("/")
+        project = file_parsed[1]
+        nchars = len(project)
+        nchars_max = max(nchars_max, nchars)
+        data['PROJECT'][ifile] = project
+
+    data.info()
+
+    unique_projects, index, counts = np.unique(
+        data['PROJECT'], return_index=True, return_counts=True)
+    print('Number of unique projects:', len(unique_projects))
+
+    for iproject, project, in enumerate(unique_projects):
+        print(iproject, iproject+1, project, counts[iproject])
+
+    for ifile, file, in enumerate(unique_files):
+        itest = (data['FILE'] == file)
+        print(ifile, file, len(data[itest]))
+        ralist = data['ALPHA_J2000'][itest]
+        declist = data['DELTA_J2000'][itest]
+        file_parsed = file.split("/")
+        filename_ds9 = file_parsed[-1] + '.ds9.reg'
+        comments = '# Project: ' + data['PROJECT'][itest[0]] + '\n' \
+            + '# ' + data['FILE'][itest[0]] + '\n'
+        write_ds9_regionfile(ralist, declist,
+                             filename=filename_ds9, symbol='circle',
+                             color='green', comments=comments)
+
+    return data
+
+def sources_stats(data, filename=None, showplot=False, saveplot=True):
+    """analyze the sources file
+
+
+    """
+    print('Number of sources:', len(data))
+
+    save = data
+
+    unique_files, index, counts = np.unique(
+        data['FILE'], return_index=True, return_counts=True)
+    print('Number of unique source files:', len(unique_files))
+
+    for ifile, file, in enumerate(unique_files):
+        print(ifile+1, ifile, counts[ifile], file)
+
+
+    # create data array with one row per file
+    data_test = data[index]
+
+    unique_naxis3, index, counts = np.unique(
+        data_test['NAXIS3'], return_index=True, return_counts=True)
+    print('Number of unique NAXIS3:',
+          len(unique_naxis3), np.sum(unique_naxis3))
+
+    for idata, naxis3, in enumerate(unique_naxis3):
+        print(idata+1, idata, counts[idata], naxis3)
+
+    suptitle =''
+    if filename is not None:
+        suptitle = filename
+    title = str(len(unique_files)) + ' files' + ' :NAXIS3 frequency'
+
+    nbins = np.max(counts) + 1
+    print('nbins:', nbins)
+    xdata = data_test['NAXIS3']
+    print('Data range:', np.min(xdata), np.max(xdata))
+    nbins = np.max(xdata) + 1
+    range = (0, np.max(xdata))
+    n, bins, patches = plt.hist(xdata, nbins, range=range,
+                                label = str(len(counts)),
+                                facecolor='green', alpha=0.75)
+
+
+    if title is not None: plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plt.xlabel('NAXI3')
+    plt.ylabel('Frequency')
+    plotfile = 'sources_histogram_NAXIS3.png'
+    plotid()
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+    #  key=raw_input("Enter any key to continue: ")
+
+    title = str(len(data)) + ' sources' + ' versus NAXIS3 value'
+    n, bins, patches = plt.hist(data['NAXIS3'], nbins, range=range,
+                                label = str(len(counts)),
+                                facecolor='green', alpha=0.75)
+
+
+    if title is not None: plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plt.xlabel('NAXI3')
+    plt.ylabel('Frequency')
+    plotfile = 'sources_histogram_sources_ByNAXIS3.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+
+
+    # key=raw_input("Enter any key to continue: ")
+
+    # the histogram of the source count data
+    unique_files, index, counts = np.unique(
+        data['FILE'], return_index=True, return_counts=True)
+    print('Number of unique source files:', len(unique_files))
+
+    print('Median:', np.median(counts))
+    nbins = np.max(counts) + 1
+    nbins=100
+    title = str(len(data)) + ' sources'
+    n, bins, patches = plt.hist(counts, nbins, label = str(len(counts)),
+                                facecolor='green', alpha=0.75)
+
+    if title is not None: plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plt.xlabel('Number of sources per image file')
+    plt.ylabel('Frequency')
+    plotfile = 'sources_histogram_ByFile.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+
+    nbins = np.max(counts) + 1
+    range = [np.min(counts), np.max(counts)+1]
+    print('range:', range)
+    n, bins, patches = plt.hist(counts, bins=nbins,
+                                label = 'files:' + str(len(counts)),
+                                range=range,
+                                facecolor='green', alpha=0.75,
+                                histtype='step', cumulative=True)
+
+    # Overlay a reversed cumulative histogram.
+    plt.hist(counts, bins=nbins, histtype='step', cumulative=-1,
+             range=range)
+
+    plt.xlim(range)
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='center right')
+    plt.xlabel('Number of sources per image file')
+    plt.ylabel('Cumulative Frequency')
+    plotfile = 'sources_cumulative_ByFile.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+
+    isort = np.argsort(counts)
+    print(len(isort))
+    cumulative = np.cumsum(counts[isort])
+    plt.plot(cumulative, label='files:' + str(len(cumulative)))
+    if title is not None: plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='center left')
+    plt.grid()
+    plt.xlabel('image file sorted by number of increasing source count')
+    plt.ylabel('Cumulative total number of source ')
+    plotfile = 'sources_cumulative_ByFileSourceNumber.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # plot histogram of frequency in Hz per image
+
+    # limit to source with CUNIT3 == 'Hz' and CTYPE3 == 'FREQ'
+    itest = (data['CTYPE3'] == 'FREQ') & (data['NAXIS3'] == 1)
+    data = data[itest]
+    print('Number of sources with CTYPE3 = FREQ:', len(data))
+
+    unique_files, index, counts = np.unique(
+        data['FILE'], return_index=True, return_counts=True)
+    print('Number of unique source files:', len(unique_files))
+
+    data = data[index]
+    xdata = data['CRVAL3'] / 1e9
+    range = [np.min(xdata), np.max(xdata)]
+    print('data range:', range)
+    nbins = 100
+    plt.hist(xdata, bins=nbins, histtype='step', label=str(len(xdata)))
+
+    title = str(len(xdata)) + ' image files'
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='center right')
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Number')
+    plotfile = 'sources_histogram_images_ByFreq.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # wavelength in mm
+    xdata = 300.0 / xdata
+    plt.hist(xdata, bins=nbins, histtype='step', label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plt.xlabel('Wavelength (mm)')
+    plt.ylabel('Number')
+    plotfile = 'sources_histogram_images_ByWavelenth.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+    xdata = 300.0e9 / data['CRVAL3']
+    ydata = counts
+    plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plotid()
+    plt.xlabel('Wavelength (mm)')
+    plt.ylabel('Number of sources per image')
+
+    plotfile = 'sources_NumberPerImage_ByWavelenth.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # look at the shape in terms of the beam
+    itest = (data['BMAJ'] == 'NA')
+    print("BMAJ == 'NA':", len(data[itest]))
+    itest = (data['BMAJ'] == 'NA')
+    print("BMIN == 'NA':", len(data[itest]))
+
+    itest = (data['BMAJ'] != 'NA') & (data['BMIN'] != 'NA')
+    data = data[itest]
+    xdata = data['BMAJ'].astype('f16')*3600.0
+    ydata = data['BMIN'].astype('f16')*3600.0
+
+    plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='upper left')
+    plotid()
+    plt.xlabel('BMAJ (arcsec)')
+    plt.ylabel('BMIN (arcsec)')
+
+    plotfile = 'sources_BMAJ_v_BMIN_arcsec.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # look at the  image pixel size
+    xdata = data['BMAJ'].astype('f16')/data['CDELT2']
+    ydata = data['BMIN'].astype('f16')/data['CDELT2']
+
+    plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='upper left')
+    plotid()
+    plt.xlabel('BMAJ/CDELT2')
+    plt.ylabel('BMIN/CDELT2')
+
+    plotfile = 'sources_BMAJ_v_BMIN_pixels.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+    # look at the BEAM Sampling
+    xdata = data['CDELT1']*3600.0
+    ydata = data['CDELT2']*3600.0
+
+    plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='upper left')
+    plotid()
+    plt.xlabel('CDELT1 (arcsec)')
+    plt.ylabel('CDELT2 (arcsec)')
+
+    plotfile = 'sources_CDELT1_v_CDELT2.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # look at Kron radius versus sqrt(BMAJ^2 + BMIN^2)
+    data = save
+    itest = (data['CTYPE3'] == 'FREQ') & (data['NAXIS3'] == 1)
+    data = data[itest]
+
+    itest = (data['BMAJ'] != 'NA') & (data['BMIN'] != 'NA')
+    data = data[itest]
+
+    xdata = np.sqrt(np.square(data['BMAJ'].astype('f16')) + \
+                    np.square(data['BMIN'].astype('f16'))) / data['CDELT2']
+    ydata = data['KRON_RADIUS']
+
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5, label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='upper right')
+    plotid()
+    plt.xlabel('<BEAM> pixels')
+    plt.ylabel('KRON_RADIUS pixels')
+
+    plt.show()
+
+    xdata = np.sqrt(np.square(data['BMAJ'].astype('f16')) + \
+                    np.square(data['BMIN'].astype('f16'))) / data['CDELT2']
+    ydata = data['FWHM_IMAGE']
+
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5, label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend(loc='upper right')
+    plotid()
+    plt.xlabel('<BEAM> pixels')
+    plt.ylabel('FWHM_IMAGE pixels')
+
+    plt.show()
+
+    unique_flags, index, counts = np.unique(
+        data['FLAGS'], return_index=True, return_counts=True)
+    print('Number of unique source FLAGS:', len(unique_flags))
+    for iflag, flag, in enumerate(unique_flags):
+        print(iflag + 1, iflag, counts[iflag], flag)
+
+
+    range = [0, np.max(unique_flags)+1]
+    nbins = range[1]
+    xdata = data['FLAGS']
+    plt.hist(xdata, bins=nbins, histtype='step', range=range,
+             label=str(len(xdata)))
+
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
+    plt.legend()
+    plt.xlabel('FLAGS')
+    plt.ylabel('Number')
+    plt.show()
+    plt.close()
+
+
+    return
+
 
 if __name__ == "__main__":
     # hundreds of lines of code
@@ -59,6 +472,8 @@ if __name__ == "__main__":
     print('Number of data fields in row 1:', len(alma[0]))
     print(alma[0])
 
+    # extract the project ID from the file
+    project = []
 
     # table = ascii.read(infile, header_start=0, data_start=1)
     # print()
@@ -67,21 +482,42 @@ if __name__ == "__main__":
 
     # table = Table.read(infile)
 
-    table_stats('sources.fits', debug=True)
+    table_stats('sources.fits', debug=False)
     alma.info()
     alma.info('stats')
 
-def sources_stats(data):
-    """
+    make_ds9regionfile(alma)
+    sys.exit()
+
+    sources_stats(alma, filename=infile)
+
+    print('Number of sources:', len(alma))
+    # limit to source with NAXIS3 == 1
+    itest = (alma['NAXIS3'] == 1)
+    alma = alma[itest]
+    print('Number of sources:', len(alma))
+
+    # limit to source with CUNIT3 == 'Hz' and CTYPE3 == 'FREQ'
+    itest = (alma['CTYPE3'] == 'FREQ')
+    alma = alma[itest]
+    print('Number of sources:', len(alma))
+
+    itest = (alma['CUNIT3'] == 'Hz')
+    alma = alma[itest]
+    print('Number of sources:', len(alma))
 
 
-    """
 
+    sys.exit()
 
+    print('Check for FLAGS != -')
+    itest = (alma['FLAGS'] == 0)
+    alma = alma[itest]
+    print('Number of sources:', len(alma))
 
+    # sys.exit()
 
-    return
-
+    showplot = True
     limitflux = False
     if limitflux:
         itest = (alma['FLUX_AUTO'] > 0.003) & (alma['FLUX_AUTO'] < 0.030) & \
@@ -96,13 +532,17 @@ def sources_stats(data):
     xdata = xdata[itest]
     ydata = ydata[itest]
     plt.suptitle(infile)
-    plt.xlabel('FLUX_AUTO')
-    plt.ylabel('FLUXERR_AUTO')
-    plt.plot(xdata, ydata, '.', label=len(xdata))
+    plt.xlabel('FLUX_AUTO (Jy)')
+    plt.ylabel('FLUXERR_AUTO (Jy)')
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
     plt.legend(fontsize='medium')
-    plt.show()
+    plotid()
+    plotfile = 'sources_flux_fluxerr.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
     plt.close()
-
 
 
     xdata = alma['FLUX_AUTO']
@@ -117,7 +557,7 @@ def sources_stats(data):
     plt.suptitle(infile)
     plt.xlabel('FLUX_AUTO (Jy)')
     plt.ylabel('S/N')
-    plt.plot(xdata, ydata, '.', label=len(xdata))
+    plt.plot(xdata, ydata, '.', alpha=0.5, label=len(xdata))
     plt.legend(fontsize='medium')
     plt.show()
     plt.close()
