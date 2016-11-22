@@ -89,7 +89,7 @@ def make_ds9regionfile(data):
 
     return data
 
-def sources_stats(data, filename=None, showplot=False, saveplot=True):
+def source_stats(data, filename=None, showplot=False, saveplot=True):
     """analyze the sources file
 
 
@@ -223,7 +223,7 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
     plt.grid()
     plt.xlabel('image file sorted by number of increasing source count')
     plt.ylabel('Cumulative total number of source ')
-    plotfile = 'sources_cumulative_ByFileSourceNumber.png'
+    plotfile = 'sources_cumulative_ByFileSourceumber.png'
     plt.savefig(plotfile)
     if showplot:
         plt.show()
@@ -311,7 +311,16 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
     xdata = data['BMAJ'].astype('f16')*3600.0
     ydata = data['BMIN'].astype('f16')*3600.0
 
+    xrange = [0.0, np.max(xdata)]
+    yrange = [0.0, np.max(ydata)]
+    xrange[1] = max(xrange[1], yrange[1])
+    yrange[1] = max(xrange[1], yrange[1])
+
     plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    plt.axes().set_aspect('equal')
+    plt.xlim(xrange)
+    plt.ylim(yrange)
 
     if title is not None:
         plt.title(title , fontsize='medium')
@@ -333,7 +342,17 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
     xdata = data['BMAJ'].astype('f16')/data['CDELT2']
     ydata = data['BMIN'].astype('f16')/data['CDELT2']
 
+    xrange = [0.0, np.max(xdata)]
+    yrange = [0.0, np.max(ydata)]
+    xrange[1] = max(xrange[1], yrange[1])
+    yrange[1] = max(xrange[1], yrange[1])
+
     plt.plot(xdata, ydata, '.', label=str(len(xdata)))
+
+    plt.axes().set_aspect('equal')
+    plt.xlim(xrange)
+    plt.ylim(yrange)
+
 
     if title is not None:
         plt.title(title , fontsize='medium')
@@ -394,7 +413,12 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
     plt.xlabel('<BEAM> pixels')
     plt.ylabel('KRON_RADIUS pixels')
 
-    plt.show()
+    plotfile = 'sources_BeamPixels_v_KronRadius.png'
+    print('Saving:', plotfile)
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
 
     xdata = np.sqrt(np.square(data['BMAJ'].astype('f16')) + \
                     np.square(data['BMIN'].astype('f16'))) / data['CDELT2']
@@ -429,6 +453,7 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
         plt.title(title , fontsize='medium')
     plt.suptitle(suptitle)
     plt.legend()
+    plotid()
     plt.xlabel('FLAGS')
     plt.ylabel('Number')
     plt.show()
@@ -437,6 +462,259 @@ def sources_stats(data, filename=None, showplot=False, saveplot=True):
 
     return
 
+
+def Calibrators(alma=None, calibrators=None, plottitle='',
+                showplot=True):
+     """
+
+     """
+     # read in calibrators
+     calibrators = Table.read('calibrators_20161117.fits')
+     ra = calibrators['RA']
+     dec = calibrators['Dec']
+     radec_calibrators = SkyCoord(ra, dec,
+                                  unit=(u.degree, u.degree), frame='icrs')
+
+     # assign ALMA sources ra, dec arrays
+     ra = alma['ALPHA_J2000']
+     dec = alma['DELTA_J2000']
+     radec_alma = SkyCoord(ra, dec,
+                           unit=(u.degree, u.degree), frame='icrs')
+
+     print('Using: match_to_catalog_sky')
+     idxmatch, d2d, d3d = radec_alma.match_to_catalog_sky(radec_calibrators)
+
+     print('len(idxmatch):', len(idxmatch))
+     print('idxmatch range:', np.min(idxmatch), np.max(idxmatch))
+     print('len(radec_calibrators):', len(radec_calibrators))
+     print('len(radec_alma):', len(radec_alma))
+     print('d2d range:', np.min(d2d), np.max(d2d))
+     print('d2d range:', np.min(d2d).arcsec, np.max(d2d).arcsec)
+
+
+     xdata = d2d.arcsec
+     itest = (xdata <= 30.0)
+     xdata = xdata[itest]
+     nbins = 60
+     range = (0.0, 30.0)
+     n, bins, patches = plt.hist(xdata, nbins, range=range,
+                            label = str(len(xdata)),
+                            facecolor='green', alpha=0.75)
+     plt.xlim(range)
+     if plottitle is not None:
+         title = plottitle
+         plt.title(title , fontsize='medium')
+     plt.legend()
+     plt.xlabel('d2d (arcsec)')
+     plt.ylabel('Frequency')
+     plotfile = 'sources_histogram_dr_calibrators.png'
+     plotid()
+     plt.savefig(plotfile)
+     if showplot:
+         plt.show()
+     plt.close()
+
+     return
+
+
+def SourceDistribution(alma=None, plottitle='', xyfilter=False):
+    """
+
+    """
+    title = plottitle
+
+    showplot = True
+    plt.close()
+    xdata = alma['X_IMAGE']
+    ydata = alma['Y_IMAGE']
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+
+    plt.xlabel('X_IMAGE')
+    plt.ylabel('Y_IMAGE')
+
+    plt.legend(fontsize='medium')
+    plotid()
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    showplot = True
+    plt.close()
+    xdata = alma['X_IMAGE']
+    ydata = alma['Y_IMAGE']
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+    plt.legend(fontsize='medium')
+    plotid()
+    plt.xlim((0, 400.0))
+    plt.ylim((0, 400.0))
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution_zoom.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+    showplot = True
+    plt.close()
+    xdata = alma['X_IMAGE']/alma['NAXIS1']
+    ydata = alma['Y_IMAGE']/alma['NAXIS2']
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+    plt.title(title, fontsize='medium')
+    plt.legend(fontsize='medium')
+    plt.xlabel('NAXIS1/X_IMAGE')
+    plt.ylabel('NAXIS2/Y_IMAGE')
+
+    plotid()
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution_ratio.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    showplot = True
+    xdata = alma['X_IMAGE']/alma['NAXIS1']
+    ydata = alma['Y_IMAGE']/alma['NAXIS2']
+
+    itest = (xdata > 0.45) & (xdata < 0.55) & (ydata > 0.45) & (ydata < 0.55)
+
+    xdata = xdata[itest]
+    ydata = ydata[itest]
+
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+    plt.grid()
+
+    plt.title(title, fontsize='medium')
+    plt.legend(fontsize='medium')
+    plt.xlabel('NAXIS1/X_IMAGE')
+    plt.ylabel('NAXIS2/Y_IMAGE')
+    plt.xlim((0.45, 0.55))
+    plt.ylim((0.45, 0.55))
+
+    plotid()
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution_ratio_zoom.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+
+    showplot = True
+    xdata = (alma['X_IMAGE']-1.0)/alma['NAXIS1']
+    ydata = (alma['Y_IMAGE']-1.0)/alma['NAXIS2']
+
+    itest = (xdata > 0.495) & (xdata < 0.505) & (ydata > 0.495) \
+        & (ydata < 0.505)
+
+    xdata = xdata[itest]
+    ydata = ydata[itest]
+
+    xmedian = np.median(xdata)
+    ymedian = np.median(ydata)
+    print('Median (xdata):', xmedian)
+    print('Median (ydata):', ymedian)
+
+    dr = np.sqrt(np.square(xdata - xmedian) + np.square(ydata - ymedian))
+
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+    plt.grid()
+
+    plt.title(title, fontsize='medium')
+    plt.legend(fontsize='medium')
+    plt.xlabel('NAXIS1/X_IMAGE')
+    plt.ylabel('NAXIS2/Y_IMAGE')
+    plt.xlim((0.495, 0.505))
+    plt.ylim((0.495, 0.505))
+
+    plotid()
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution_ratio_zoom2.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+    xdata = xdata - xmedian
+    ydata = ydata - ymedian
+
+    plt.plot(xdata, ydata, '.', ms=2.0, alpha=0.5,
+             label='Sources:' + str(len(xdata)))
+    plt.grid()
+
+    plt.title(title, fontsize='medium')
+    plt.legend(fontsize='medium')
+    plt.xlabel('Relative NAXIS1/X_IMAGE')
+    plt.ylabel('Relative NAXIS2/Y_IMAGE')
+    plt.xlim((-0.005, 0.005))
+    plt.ylim((-0.005, 0.005))
+
+    plotid()
+    plt.axes().set_aspect('equal')
+    plotfile = 'sources_xydistribution_ratio_zoom3.png'
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    xdata = dr
+    nbins = 50
+    range = (0, np.max(xdata))
+    n, bins, patches = plt.hist(xdata, nbins,
+                                label = str(len(xdata)),
+                                facecolor='green', alpha=0.75)
+
+    if title is not None: plt.title(title , fontsize='medium')
+    plt.title(title)
+    plt.legend()
+    plt.xlabel('dr (normalised)')
+    plt.ylabel('Frequency')
+    plotfile = 'sources_histogram_dr.png'
+    plotid()
+    plt.savefig(plotfile)
+    if showplot:
+        plt.show()
+    plt.close()
+
+
+    # filter the data
+    xdata = (alma['X_IMAGE']-1.0)/alma['NAXIS1']
+    ydata = (alma['Y_IMAGE']-1.0)/alma['NAXIS2']
+
+    # limit to central region in x and y
+    itest = (xdata > 0.495) & (xdata < 0.505) & (ydata > 0.495) \
+        & (ydata < 0.505)
+
+    xdata = xdata[itest]
+    ydata = ydata[itest]
+
+    xmedian = np.median(xdata)
+    ymedian = np.median(ydata)
+    print('Median (xdata):', xmedian)
+    print('Median (ydata):', ymedian)
+
+    # now apply test to whole file
+    xdata = (alma['X_IMAGE']-1.0)/alma['NAXIS1']
+    ydata = (alma['Y_IMAGE']-1.0)/alma['NAXIS2']
+    dr = np.sqrt(np.square(xdata - xmedian) + np.square(ydata - ymedian))
+
+    itest = (dr <= 0.001)
+
+    result = alma[itest]
+
+    return result
 
 if __name__ == "__main__":
     # hundreds of lines of code
@@ -472,6 +750,8 @@ if __name__ == "__main__":
     print('Number of data fields in row 1:', len(alma[0]))
     print(alma[0])
 
+    Calibrators(alma=alma, calibrators=None, plottitle=infile)
+
     # extract the project ID from the file
     project = []
 
@@ -486,8 +766,14 @@ if __name__ == "__main__":
     alma.info()
     alma.info('stats')
 
-    make_ds9regionfile(alma)
+    result = SourceDistribution(alma=alma, plottitle=infile, xyfilter=True)
+    print('Number of rows in xy filtered source file:', len(result))
+    result.write('result.fits', overwrite=True)
+
     sys.exit()
+
+    # make_ds9regionfile(alma)
+    # sys.exit()
 
     sources_stats(alma, filename=infile)
 
@@ -496,6 +782,10 @@ if __name__ == "__main__":
     itest = (alma['NAXIS3'] == 1)
     alma = alma[itest]
     print('Number of sources:', len(alma))
+
+
+
+
 
     # limit to source with CUNIT3 == 'Hz' and CTYPE3 == 'FREQ'
     itest = (alma['CTYPE3'] == 'FREQ')
@@ -506,21 +796,21 @@ if __name__ == "__main__":
     alma = alma[itest]
     print('Number of sources:', len(alma))
 
-
-
-    sys.exit()
-
-    print('Check for FLAGS != -')
+    print('Check for FLAGS != 0')
     itest = (alma['FLAGS'] == 0)
     alma = alma[itest]
-    print('Number of sources:', len(alma))
+    print('Number of sources with FLAGS ==0 :', len(alma))
+
+    itest = (np.char.find(alma['FILE'],'spw') == -1)
+    alma = alma[itest]
+    print('Number of sources not in spw files:', len(alma))
 
     # sys.exit()
 
     showplot = True
-    limitflux = False
+    limitflux = True
     if limitflux:
-        itest = (alma['FLUX_AUTO'] > 0.003) & (alma['FLUX_AUTO'] < 0.030) & \
+        itest = (alma['FLUX_AUTO'] > 0.002) & (alma['FLUX_AUTO'] < 0.030) & \
                 (alma['FLUX_AUTO']/alma['FLUXERR_AUTO'] > 5.0) & \
                 (alma['FLUX_AUTO']/alma['FLUXERR_AUTO'] < 50.0)
 
@@ -593,7 +883,6 @@ if __name__ == "__main__":
 
     ra = alma['ALPHA_J2000']
     dec = alma['DELTA_J2000']
-
     radec_alma = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
     # newtable = Table([ra, dec], names=('ra', 'dec'))
@@ -637,13 +926,39 @@ if __name__ == "__main__":
     xdata = dra.arcsec
     ydata = ddec.arcsec
 
-    range = 4.0
+    range = 10.0
     itest = (abs(xdata) < range) & (abs(ydata) < range)
     xdata = xdata[itest]
     ydata = ydata[itest]
+    plt.plot(xdata, ydata, '.', ms=4.0, alpha=0.5, label=len(xdata))
+    # plt.axis('equal')
+    if title is not None:
+        plt.title(title , fontsize='medium')
+    plt.suptitle(suptitle)
 
-    plt.plot(xdata, ydata, '.', label=len(xdata))
-    plt.axis()
-    plt.axes().set_aspect('equal', 'datalim')
+    plt.axes().set_aspect('equal')
+    plt.xlabel('Delta RA (arcsec)')
+    plt.ylabel('Delta Dec (arcsec)')
+    plt.xlim((-1.0*range, range))
+    plt.ylim((-1.0*range, range))
+
+    plt.grid()
     plt.legend()
+    plotid()
+    plt.show()
+
+
+    xdata = separation.arcsec
+    itest = (abs(xdata) < 20.0)
+    xdata = xdata[itest]
+    nbins = 20
+    plt.hist(xdata, bins=nbins, histtype='step',
+             label=str(len(xdata)))
+
+    plt.suptitle(infile)
+    plt.suptitle(infile)
+    plt.xlabel('Radial offset (arcsec)')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plotid()
     plt.show()
