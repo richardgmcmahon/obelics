@@ -6,7 +6,6 @@ http://astroquery.readthedocs.io/en/latest/
 so used alma_aq_data.csv via wget
 
 
-
 """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
@@ -93,7 +92,7 @@ def rd_config(config_file=None):
 
     return config
 
-def ScanIntent(data, debug=False):
+def ScanIntent(data, sciencetarget=False, debug=False):
     """
     # list the unique scan intents
     """
@@ -103,16 +102,48 @@ def ScanIntent(data, debug=False):
     for irow, row in enumerate(unique_ScanIntent):
         print(irow + 1, row, counts[irow])
 
-    return
+    itest = (np.char.find(data['Scan intent'], 'TARGET') > -1)
+    print('Number of Scan intent: TARGET', len(data[itest]))
 
-def find_Project(data, project=None):
+    if sciencetarget:
+        data = data[itest]
+
+    return data
+
+def ProjectCode(data, project=None, sciencetarget=True, verbose=False):
+
+     import numpy as np
 
      count = 0
      for irow, row in enumerate(data):
-        if row['Project code'].find(project) >= 0:
+        if row['Project code'].find(project) > -1:
+            print(row['Project code'], row['Source name'],
+                  row['Scan intent'])
             count = count + 1
-            print(irow+1, count, row)
-     return
+            if verbose: print(irow+1, count, row)
+            print('np.char.find:',
+                  np.char.find(row['Scan intent'], 'TARGET'))
+
+     print('Number of observations found:', project, count)
+
+     itest = (np.char.find(data['Project code'], project) > -1)
+
+     data = data[itest]
+
+     print('Number of observations:', len(data))
+
+     if sciencetarget:
+        itest = (np.char.find(data['Scan intent'], 'TARGET') > -1)
+        print('Number of Science Targets:', len(data[itest]))
+        data = data[itest]
+
+
+     for row in data:
+         print(row['Project code'], row['Source name'], row['Scan intent'],
+               row['RA'], row['Dec'],
+               row['Group ous id'], row['Member ous id'], row['Asdm uid'])
+
+     return data
 
 def ProjectCodeStats(data, debug=False):
 
@@ -522,9 +553,11 @@ def alma_match(alma=None, radec_match=None, table_match=None,
     return alma
 
 
-def drqso_analysis(radec_alma=None, dr='dr7'):
+def drqso_analysis(radec_alma=None, dr='dr7', xmatch_radius=5.0,
+                   debug=False, colnames_radec=('RA', 'DEC')):
     """
 
+   should be merged with veron2010_analysis
 
     """
     if dr == 'dr12':
@@ -534,14 +567,12 @@ def drqso_analysis(radec_alma=None, dr='dr7'):
 
     print('Reading:', infile)
     drqso = Table.read(infile)
-    debug = True
+
     if debug:
         drqso.info('stats')
 
-
-
-    ra = drqso['RA']
-    dec = drqso['DEC']
+    ra = drqso[colnames_radec[0]]
+    dec = drqso[colnames_radec[1]]
     radec_drqso = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
 
@@ -575,11 +606,13 @@ def drqso_analysis(radec_alma=None, dr='dr7'):
     # create table of Veron quasars that have ALMA observations
     drqso_alma = drqso[idx_unique_indices]
     xdata = d2d[idx_unique_indices].arcsec
-    itest = xdata  < 15.0
+
+    itest = xdata  < xmatch_radius
 
     drqso_alma = drqso_alma[itest]
     ndata = len(drqso_alma)
-    print('Number of Quasars within 15" match radius:', ndata)
+    print('Number of Quasars within ' + str(xmatch_radius) +
+          'arcsec match radius:', ndata)
     print()
 
     if dr == 'dr7':
@@ -599,8 +632,11 @@ def drqso_analysis(radec_alma=None, dr='dr7'):
     return drqso_alma
 
 
-def veron2010_analysis(alma=None, radec_alma=None, xmatch_radius=15.0):
-    """    read in Veron+2010 quasar catalogue and match to ALMA
+def veron2010_analysis(alma=None, radec_alma=None,
+                       xmatch_radius=5.0, radioquiet=True):
+    """read in Veron+2010 quasar catalogue and match to ALMA
+
+    TODO: should merge with drqso_analysis
 
     """
 
@@ -670,7 +706,7 @@ def veron2010_analysis(alma=None, radec_alma=None, xmatch_radius=15.0):
 
     xdata = xdata[itest]
     ndata = len(xdata)
-    print('Number of Veron+2010 Quasars within 15" match radius:', ndata)
+    print('Number of Veron+2010 Quasars within xmatch radius:', ndata)
 
     plt.hist(xdata, bins=60, label=str(ndata))
     plt.grid()
@@ -700,11 +736,12 @@ def veron2010_analysis(alma=None, radec_alma=None, xmatch_radius=15.0):
     plt.savefig(plotfile)
     plt.clf()
 
-
     xdata = veron_alma['F6cm']
     ndata = len(xdata)
-    print(min(xdata), max(ydata))
-    print(xdata)
+    print('len(xdata):', ndata)
+    if ndata == 0:
+        return
+
     # get rid of NANs since they cause hist to crash
     xdata = np.log10(xdata[~np.isnan(xdata)])
     ndata = len(xdata)
@@ -804,18 +841,43 @@ def veron2010_analysis(alma=None, radec_alma=None, xmatch_radius=15.0):
 
     veron_alma = veron_alma[itest_rqq]
 
-    print('Number of source returned:', len(veron_alma))
+    print('Number of radio quiet sources returned:', len(veron_alma))
 
     ra = veron_alma['RAJ2000']
     dec = veron_alma['DEJ2000']
     radec_veron_alma = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
     idx, d2d, d3d = radec_veron_alma.match_to_catalog_sky(radec_alma)
-    print(len(idx))
+
+    print('len(veron_alma):', len(veron_alma))
+    print('len(radec_veron_alma):', len(radec_veron_alma))
+
+    print('len(alma):', len(alma))
+    print('len(radec_alma):', len(radec_alma))
+
+    print('len(idx):', len(idx))
+    print('idxmatch range:', np.min(idx), np.max(idx))
+    idx_unique, idx_unique_indices = np.unique(idx, return_index=True)
+    print('Number of unique sources:', len(idx_unique), len(idx))
+    print('idxmatch range:', np.min(idx_unique_indices),
+          np.max(idx_unique_indices))
+    print()
+
+    # alma[idx] match to
+
 
     for irow, i, in enumerate(idx):
         print(irow+1, irow, i,
-              alma['Project code'][i], alma['Scan intent'][i])
+              alma['Project code'][i], alma['Scan intent'][i],
+              alma['Source name'][i],
+              '{:9.4f}'.format(alma['RA'][i]),
+              '{:8.4f}'.format(alma['Dec'][i]),
+              veron_alma['Name'][irow], veron_alma['z'][irow],
+              veron_alma['F6cm'][irow], veron_alma['F20cm'][irow],
+              '{:9.4f}'.format(veron_alma['RAJ2000'][irow]),
+              '{:8.4f}'.format(veron_alma['DEJ2000'][irow]))
+
+    print('len(veron_alma):', len(veron_alma))
 
     return veron_alma
 
@@ -871,13 +933,15 @@ def alma_read(calibrators=False,
 
         ProjectCodeStats(alma, debug=False)
 
+
+
         if debug:
             key=raw_input("Enter any key to continue: ")
 
         # 'PHASE|BAND|FLUX|AMPLI|POLARIZATION'
         if calibrators:
 
-
+            # select all the possible calibrator observations
             itest = (np.char.find(alma['Scan intent'],'PHASE') >= 0) | \
                     (np.char.find(alma['Scan intent'],'BAND') >= 0) | \
                     (np.char.find(alma['Scan intent'],'FLUX') >= 0) | \
@@ -886,12 +950,15 @@ def alma_read(calibrators=False,
             alma = alma[itest]
             print('Number of calibrator observations:', len(alma))
 
-            unique_calibrators, index, counts = np.unique(
-                alma['Source name'],
-                return_index=True,
-                return_counts=True)
-            alma = alma[index]
-            print('Number of unique calibrators:', len(unique_calibrators))
+            # locate unique calibrators by Source name
+            unique_source_name = False
+            if unique_source_name:
+                unique_calibrators, index, counts = np.unique(
+                   alma['Source name'],
+                   return_index=True,
+                   return_counts=True)
+                alma = alma[index]
+                print('Number of unique calibrators:', len(unique_calibrators))
 
     return alma, infile
 
@@ -966,20 +1033,26 @@ if __name__ == '__main__':
 
     # project_code = '2011.0.00725'
     if project_code is not None:
-        find_Project(alma, project_code)
+        result = ProjectCode(alma, project_code)
+        alma = result
+        ScanIntent(alma, debug=False)
         key=raw_input("Enter any key to continue: ")
 
+    # explore calibrators: ReadCalibrators
     calibrators, infile = alma_read(debug=False, calibrators=True)
-    calibrators.write('calibrator_observations.fits', overwrite=True)
+    calibrators.write('calibrator_observations_all.fits', overwrite=True)
     key=raw_input("Enter any key to continue: ")
 
-    ScanIntent(alma, debug=False)
+    print('ALMA archive file has been read in:', len(alma))
 
-    print('ALMA archive file has been read in')
+    print('Now optional filter on Scan intent')
+    alma = ScanIntent(alma, debug=False, sciencetarget=True)
+
+    print('ALMA archive file has been read in:', len(alma))
+
     key=raw_input("Enter any key to continue: ")
 
-    # explore_alma(alma=alma, infile=infile, debug=False)
-
+    explore_alma(alma=alma, infile=infile, debug=False)
 
     # plt.show()
     # create astropy RA, Dec 'object' thing
@@ -987,22 +1060,34 @@ if __name__ == '__main__':
     dec = alma['Dec']
     radec_alma = SkyCoord(ra, dec,unit=(u.degree, u.degree), frame='icrs')
 
-
     # read and match to Veron+2010 quasars
     veron2010_alma = veron2010_analysis(alma=alma,
                                         radec_alma=radec_alma)
-    print('Veron+2010 has been read in and matched to ALMA Archive')
-    key=raw_input("Enter any key to continue: ")
+    # if result is 'empty' is returned as a NoneType
+    if veron2010_alma is not None:
+        print('len(veron2010_alma):', len(veron2010_alma))
+    if veron2010_alma is None:
+        print('None matched to Veron+2010')
+        print('veron2010_alma:', veron2010_alma)
 
+    print('Veron+2010 has been read in and matched to radio quiet TARGETs in ALMA Archive')
+    key=raw_input("Enter any key to continue: ")
 
     # read and match to SDSS DR7QSO quasars
     dr7qso_alma = drqso_analysis(radec_alma=radec_alma)
+    print('DR7QSO has been read in and matched to ALMA Archive')
+    print(len(radec_alma))
+    key=raw_input("Enter any key to continue: ")
 
     dr12qso_alma = drqso_analysis(radec_alma=radec_alma, dr='dr12')
+    print('DR12QSO has been read in and matched to ALMA Archive')
+    key=raw_input("Enter any key to continue: ")
+
 
     # make a html table with NED and SDSS DR7 and DR12 links
 
     # match Veron+2010 back to alma observataions
+    print('len(veron2010_alma):', len(veron2010_alma))
     ra = veron2010_alma['RAJ2000']
     dec = veron2010_alma['DEJ2000']
     print()
